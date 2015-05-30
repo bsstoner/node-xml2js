@@ -145,47 +145,6 @@ module.exports =
     # determine number of items in object
     equ Object.keys(r.sample.$$.tagcasetest[0].$$).length, 3)
 
-  'test parse with explicitChildren and preserveChildrenOrder': skeleton(explicitChildren: true, preserveChildrenOrder: true, (r) ->
-    console.log 'Result object: ' + util.inspect r, false, 10
-    equ r.sample.$$[10]['#name'], 'ordertest'
-    equ r.sample.$$[10].$$[0]['#name'], 'one'
-    equ r.sample.$$[10].$$[0]._, '1'
-    equ r.sample.$$[10].$$[1]['#name'], 'two'
-    equ r.sample.$$[10].$$[1]._, '2'
-    equ r.sample.$$[10].$$[2]['#name'], 'three'
-    equ r.sample.$$[10].$$[2]._, '3'
-    equ r.sample.$$[10].$$[3]['#name'], 'one'
-    equ r.sample.$$[10].$$[3]._, '4'
-    equ r.sample.$$[10].$$[4]['#name'], 'two'
-    equ r.sample.$$[10].$$[4]._, '5'
-    equ r.sample.$$[10].$$[5]['#name'], 'three'
-    equ r.sample.$$[10].$$[5]._, '6')
-
-  'test parse with explicitChildren and charsAsChildren and preserveChildrenOrder': skeleton(explicitChildren: true, preserveChildrenOrder: true, charsAsChildren: true, (r) ->
-    console.log 'Result object: ' + util.inspect r, false, 10
-    equ r.sample.$$[10]['#name'], 'ordertest'
-    equ r.sample.$$[10].$$[0]['#name'], 'one'
-    equ r.sample.$$[10].$$[0]._, '1'
-    equ r.sample.$$[10].$$[1]['#name'], 'two'
-    equ r.sample.$$[10].$$[1]._, '2'
-    equ r.sample.$$[10].$$[2]['#name'], 'three'
-    equ r.sample.$$[10].$$[2]._, '3'
-    equ r.sample.$$[10].$$[3]['#name'], 'one'
-    equ r.sample.$$[10].$$[3]._, '4'
-    equ r.sample.$$[10].$$[4]['#name'], 'two'
-    equ r.sample.$$[10].$$[4]._, '5'
-    equ r.sample.$$[10].$$[5]['#name'], 'three'
-    equ r.sample.$$[10].$$[5]._, '6'
-
-    # test text ordering with XML nodes in the middle
-    equ r.sample.$$[16]['#name'], 'textordertest'
-    equ r.sample.$$[16].$$[0]['#name'], '__text__'
-    equ r.sample.$$[16].$$[0]._, 'this is text with '
-    equ r.sample.$$[16].$$[1]['#name'], 'b'
-    equ r.sample.$$[16].$$[1]._, 'markup'
-    equ r.sample.$$[16].$$[2]['#name'], '__text__'
-    equ r.sample.$$[16].$$[2]._, ' in the middle')
-
   'test element without children': skeleton(explicitChildren: true, (r) ->
     console.log 'Result object: ' + util.inspect r, false, 10
     equ r.sample.$$.nochildrentest[0].$$, undefined)
@@ -276,16 +235,6 @@ module.exports =
         equ r.sample.chartest[0]._, 'Character data here!'
         test.finish()
 
-  'test simple callback with options': (test) ->
-    fs.readFile fileName, (err, data) ->
-      xml2js.parseString data,
-        trim: true
-        normalize: true,
-        (err, r) ->
-          console.log r
-          equ r.sample.whitespacetest[0]._, 'Line One Line Two'
-          test.finish()
-
   'test double parse': (test) ->
     x2js = new xml2js.Parser()
     fs.readFile fileName, (err, data) ->
@@ -299,13 +248,6 @@ module.exports =
           equ r.sample.chartest[0]._, 'Character data here!'
           test.finish()
 
-  'test element with garbage XML': (test) ->
-    x2js = new xml2js.Parser()
-    xmlString = "<<>fdfsdfsdf<><<><??><<><>!<>!<!<>!."
-    x2js.parseString xmlString, (err, result) ->
-      assert.notEqual err, null
-      test.finish()
-
   'test simple function without options': (test) ->
     fs.readFile fileName, (err, data) ->
       xml2js.parseString data, (err, r) ->
@@ -317,13 +259,6 @@ module.exports =
     fs.readFile fileName, (err, data) ->
       # well, {} still counts as option, right?
       xml2js.parseString data, {}, (err, r) ->
-        equ err, null
-        equ r.sample.chartest[0]._, 'Character data here!'
-        test.finish()
-
-  'test async execution': (test) ->
-    fs.readFile fileName, (err, data) ->
-      xml2js.parseString data, async: true, (err, r) ->
         equ err, null
         equ r.sample.chartest[0]._, 'Character data here!'
         test.finish()
@@ -385,28 +320,6 @@ module.exports =
       equ e.message, 'Custom error message'
       test.finish()
 
-  'test no error event after end': (test) ->
-    xml = '<?xml version="1.0" encoding="utf-8"?><test>test</test>'
-    i = 0
-    x2js = new xml2js.Parser()
-    x2js.on 'error', ->
-      i = i + 1
-
-    x2js.on 'end', ->
-      #This is a userland callback doing something with the result xml.
-      #Errors in here should not be passed to the parser's 'error' callbacks
-      #Errors here should be propagated so that the user can see them and
-      #fix them.
-      throw new Error('some error in user-land')
-
-    try
-      x2js.parseString(xml)
-    catch e
-      equ e.message, 'some error in user-land'
-
-    equ i, 0
-    test.finish()
-
   'test empty CDATA': (test) ->
     xml = '<xml><Label><![CDATA[]]></Label><MsgId>5850440872586764820</MsgId></xml>'
     xml2js.parseString xml, (err, parsed) ->
@@ -417,18 +330,6 @@ module.exports =
     xml = '<spacecdatatest><![CDATA[ ]]></spacecdatatest>'
     xml2js.parseString xml, (err, parsed) ->
       equ parsed.spacecdatatest, ' '
-      test.finish()
-
-  'test escaped CDATA result': (test) ->
-    xml = '<spacecdatatest><![CDATA[]]]]><![CDATA[>]]></spacecdatatest>'
-    xml2js.parseString xml, (err, parsed) ->
-      equ parsed.spacecdatatest, ']]>'
-      test.finish()
-
-  'test escaped CDATA result': (test) ->
-    xml = '<spacecdatatest><![CDATA[]]]]><![CDATA[>]]></spacecdatatest>'
-    xml2js.parseString xml, (err, parsed) ->
-      equ parsed.spacecdatatest, ']]>'
       test.finish()
 
   'test non-strict parsing': (test) ->
@@ -454,12 +355,6 @@ module.exports =
       assert.equal err.message, 'Unclosed root tag\nLine: 0\nColumn: 6\nChar: '
       test.finish()
 
-  'test cdata-named node': (test) ->
-    xml = "<test><cdata>hello</cdata></test>"
-    xml2js.parseString xml, (err, parsed) ->
-      assert.equal parsed.test.cdata[0], 'hello'
-      test.finish()
-
   'test single attrNameProcessors': skeleton(attrNameProcessors: [nameToUpperCase], (r)->
     console.log 'Result object: ' + util.inspect r, false, 10
     equ r.sample.attrNameProcessTest[0].$.hasOwnProperty('CAMELCASEATTR'), true
@@ -470,26 +365,10 @@ module.exports =
     equ r.sample.attrNameProcessTest[0].$.hasOwnProperty('CAME'), true
     equ r.sample.attrNameProcessTest[0].$.hasOwnProperty('LOWE'), true)
 
-  'test single valueProcessor': skeleton(valueProcessors: [nameToUpperCase], (r)->
-    console.log 'Result object: ' + util.inspect r, false, 10
-    equ r.sample.valueProcessTest[0], 'SOME VALUE')
-
-  'test multiple valueProcessor': skeleton(valueProcessors: [nameToUpperCase, nameCutoff], (r)->
-    console.log 'Result object: ' + util.inspect r, false, 10
-    equ r.sample.valueProcessTest[0], 'SOME')
-
   'test single tagNameProcessors': skeleton(tagNameProcessors: [nameToUpperCase], (r)->
     console.log 'Result object: ' + util.inspect r, false, 10
     equ r.hasOwnProperty('SAMPLE'), true
     equ r.SAMPLE.hasOwnProperty('TAGNAMEPROCESSTEST'), true)
-
-  'test single tagNameProcessors in simple callback': (test) ->
-    fs.readFile fileName, (err, data) ->
-      xml2js.parseString data, tagNameProcessors: [nameToUpperCase], (err, r)->
-        console.log 'Result object: ' + util.inspect r, false, 10
-        equ r.hasOwnProperty('SAMPLE'), true
-        equ r.SAMPLE.hasOwnProperty('TAGNAMEPROCESSTEST'), true
-        test.finish()
 
   'test multiple tagNameProcessors': skeleton(tagNameProcessors: [nameToUpperCase, nameCutoff], (r)->
     console.log 'Result object: ' + util.inspect r, false, 10

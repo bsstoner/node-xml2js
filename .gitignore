@@ -1,5 +1,2 @@
 *.swp
 node_modules
-npm-debug.log
-.nyc_output
-coverage

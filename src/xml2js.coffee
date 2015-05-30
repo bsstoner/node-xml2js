@@ -12,22 +12,6 @@ processName = (processors, processedName) ->
   processedName = process(processedName) for process in processors
   return processedName
 
-requiresCDATA = (entry) ->
-  return entry.indexOf('&') >= 0 || entry.indexOf('>') >= 0 || entry.indexOf('<') >= 0
-
-# Note that we do this manually instead of using xmlbuilder's `.dat` method
-# since it does not support escaping the CDATA close entity (throws an error if
-# it exists, and if it's pre-escaped).
-wrapCDATA = (entry) ->
-  return "<![CDATA[#{escapeCDATA entry}]]>"
-
-escapeCDATA = (entry) ->
-  # Split the CDATA section in two;
-  # The first contains the ']]'
-  # The second contains the '>'
-  # When later parsed, it will be put back together as ']]>'
-  return entry.replace ']]>', ']]]]><![CDATA[>'
-
 exports.processors = processors
 
 exports.defaults =
@@ -61,8 +45,6 @@ exports.defaults =
     strict: true
     attrNameProcessors: null
     tagNameProcessors: null
-    valueProcessors: null
-    emptyTag: ''
 
   "0.2":
     explicitCharkey: false
@@ -78,7 +60,6 @@ exports.defaults =
     validator: null
     xmlns : false
     explicitChildren: false
-    preserveChildrenOrder: false
     childkey: '$$'
     charsAsChildren: false
     # not async in 0.2 mode either
@@ -86,16 +67,11 @@ exports.defaults =
     strict: true
     attrNameProcessors: null
     tagNameProcessors: null
-    valueProcessors: null
     # xml building options
     rootName: 'root'
     xmldec: {'version': '1.0', 'encoding': 'UTF-8', 'standalone': true}
     doctype: null
     renderOpts: { 'pretty': true, 'indent': '  ', 'newline': '\n' }
-    headless: false
-    chunkSize: 10000
-    emptyTag: ''
-    cdata: false
 
 class exports.ValidationError extends Error
   constructor: (message) ->
@@ -123,13 +99,10 @@ class exports.Builder
       # otherwise we'll use whatever they've set, or the default
       rootName = @options.rootName
 
-    render = (element, obj) =>
+    render = (element, obj) ->
       if typeof obj isnt 'object'
         # single element, just append it as text
-        if @options.cdata && requiresCDATA obj
-          element.raw wrapCDATA obj
-        else
-          element.txt obj
+        element.txt obj
       else
         for own key, child of obj
           # Case #1 Attribute
@@ -141,19 +114,13 @@ class exports.Builder
 
           # Case #2 Char data (CDATA, etc.)
           else if key is charkey
-            if @options.cdata && requiresCDATA child
-              element = element.raw wrapCDATA child
-            else
-              element = element.txt child
+            element = element.txt(child)
 
           # Case #3 Array data
-          else if Array.isArray child
+          else if typeof child is 'object' and child?.constructor? and child?.constructor?.name? and child?.constructor?.name is 'Array'
             for own index, entry of child
               if typeof entry is 'string'
-                if @options.cdata && requiresCDATA entry
-                  element = element.ele(key).raw(wrapCDATA entry).up()
-                else
-                  element = element.ele(key, entry).up()
+                element = element.ele(key, entry).up()
               else
                 element = arguments.callee(element.ele(key), entry).up()
 
@@ -163,15 +130,11 @@ class exports.Builder
 
           # Case #5 String and remaining types
           else
-            if typeof child is 'string' && @options.cdata && requiresCDATA child
-              element = element.ele(key).raw(wrapCDATA child).up()
-            else
-              element = element.ele(key, child.toString()).up()
+            element = element.ele(key, child.toString()).up()
 
       element
 
-    rootElement = builder.create(rootName, @options.xmldec, @options.doctype,
-      headless: @options.headless)
+    rootElement = builder.create(rootName, @options.xmldec, @options.doctype)
 
     render(rootElement, rootObj).end(@options.renderOpts)
 
@@ -193,18 +156,6 @@ class exports.Parser extends events.EventEmitter
       @options.tagNameProcessors.unshift processors.normalize
 
     @reset()
-
-  processAsync: =>
-    if @remaining.length <= @options.chunkSize
-      chunk = @remaining
-      @remaining = ''
-      @saxParser = @saxParser.write chunk
-      @saxParser.close()
-    else
-      chunk = @remaining.substr 0, @options.chunkSize
-      @remaining = @remaining.substr @options.chunkSize, @remaining.length
-      @saxParser = @saxParser.write chunk
-      setImmediate @processAsync
 
   assignOrPush: (obj, key, newValue) =>
     if key not of obj
@@ -230,16 +181,11 @@ class exports.Parser extends events.EventEmitter
 
     # emit one error event if the sax parser fails. this is mostly a hack, but
     # the sax parser isn't state of the art either.
-    @saxParser.errThrown = false
+    err = false
     @saxParser.onerror = (error) =>
-      @saxParser.resume()
-      if ! @saxParser.errThrown
-        @saxParser.errThrown = true
+      if ! err
+        err = true
         @emit "error", error
-
-    # another hack to avoid throwing exceptions when the parsing has ended
-    # but the user-supplied callback throws an error
-    @saxParser.ended = false
 
     # always use the '#' key, even if there are no subkeys
     # setting this property by and is deprecated, yet still supported.
@@ -274,11 +220,10 @@ class exports.Parser extends events.EventEmitter
     @saxParser.onclosetag = =>
       obj = stack.pop()
       nodeName = obj["#name"]
-      delete obj["#name"] if not @options.explicitChildren or not @options.preserveChildrenOrder
+      delete obj["#name"]
 
-      if obj.cdata == true
-        cdata = obj.cdata
-        delete obj.cdata
+      cdata = obj.cdata
+      delete obj.cdata
 
       s = stack[stack.length - 1]
       # remove the '#' key altogether if it's blank
@@ -288,14 +233,16 @@ class exports.Parser extends events.EventEmitter
       else
         obj[charkey] = obj[charkey].trim() if @options.trim
         obj[charkey] = obj[charkey].replace(/\s{2,}/g, " ").trim() if @options.normalize
-        obj[charkey] = if @options.valueProcessors then processName @options.valueProcessors, obj[charkey] else obj[charkey]
         # also do away with '#' key altogether, if there's no subkeys
         # unless EXPLICIT_CHARKEY is set
         if Object.keys(obj).length == 1 and charkey of obj and not @EXPLICIT_CHARKEY
           obj = obj[charkey]
 
       if (isEmpty obj)
-        obj = if @options.emptyTag != '' then @options.emptyTag else emptyStr
+        obj = if @options.emptyTag != undefined
+          @options.emptyTag
+        else
+          emptyStr
 
       if @options.validator?
         xpath = "/" + (node["#name"] for node in stack).concat(nodeName).join("/")
@@ -306,33 +253,20 @@ class exports.Parser extends events.EventEmitter
 
       # put children into <childkey> property and unfold chars if necessary
       if @options.explicitChildren and not @options.mergeAttrs and typeof obj is 'object'
-        if not @options.preserveChildrenOrder
-          node = {}
-          # separate attributes
-          if @options.attrkey of obj
-            node[@options.attrkey] = obj[@options.attrkey]
-            delete obj[@options.attrkey]
-          # separate char data
-          if not @options.charsAsChildren and @options.charkey of obj
-            node[@options.charkey] = obj[@options.charkey]
-            delete obj[@options.charkey]
+        node = {}
+        # separate attributes
+        if @options.attrkey of obj
+          node[@options.attrkey] = obj[@options.attrkey]
+          delete obj[@options.attrkey]
+        # separate char data
+        if not @options.charsAsChildren and @options.charkey of obj
+          node[@options.charkey] = obj[@options.charkey]
+          delete obj[@options.charkey]
 
-          if Object.getOwnPropertyNames(obj).length > 0
-            node[@options.childkey] = obj
+        if Object.getOwnPropertyNames(obj).length > 0
+          node[@options.childkey] = obj
 
-          obj = node
-        else if s
-          # append current node onto parent's <childKey> array
-          s[@options.childkey] = s[@options.childkey] or []
-          # push a clone so that the node in the children array can receive the #name property while the original obj can do without it
-          objClone = {}
-          for own key of obj
-            objClone[key] = obj[key]
-          s[@options.childkey].push objClone
-          delete obj["#name"]
-          # re-check whether we can collapse the node now to just the charkey value
-          if Object.keys(obj).length == 1 and charkey of obj and not @EXPLICIT_CHARKEY
-            obj = obj[charkey]
+        obj = node
 
       # check whether we closed all the open tags
       if stack.length > 0
@@ -346,23 +280,12 @@ class exports.Parser extends events.EventEmitter
           obj[nodeName] = old
 
         @resultObject = obj
-        # parsing has ended, mark that so we won't throw exceptions from
-        # here anymore
-        @saxParser.ended = true
         @emit "end", @resultObject
 
     ontext = (text) =>
       s = stack[stack.length - 1]
       if s
         s[charkey] += text
-
-        if @options.explicitChildren and @options.preserveChildrenOrder and @options.charsAsChildren and text.replace(/\\n/g, '').trim() isnt ''
-          s[@options.childkey] = s[@options.childkey] or []
-          charChild =
-            '#name': '__text__'
-          charChild[charkey] = text
-          s[@options.childkey].push charChild
-
         s
 
     @saxParser.ontext = ontext
@@ -375,29 +298,24 @@ class exports.Parser extends events.EventEmitter
     if cb? and typeof cb is "function"
       @on "end", (result) ->
         @reset()
-        cb null, result
+        if @options.async
+          process.nextTick ->
+            cb null, result
+        else
+          cb null, result
       @on "error", (err) ->
         @reset()
-        cb err
+        if @options.async
+          process.nextTick ->
+            cb err
+        else
+          cb err
 
-    str = str.toString()
-    if str.trim() is ''
+    if str.toString().trim() is ''
       @emit "end", null
       return true
 
-    try
-      str = bom.stripBOM str
-      if @options.async
-        @remaining = str
-        setImmediate @processAsync
-        @saxParser
-      @saxParser.write(str).close()
-    catch err
-      unless @saxParser.errThrown or @saxParser.ended
-        @emit 'error', err
-        @saxParser.errThrown = true
-      else if @saxParser.ended
-        throw err
+    @saxParser.write(bom.stripBOM str.toString()).close()
 
 exports.parseString = (str, a, b) ->
   # let's determine what we got as arguments

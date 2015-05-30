@@ -52,6 +52,4 @@
     </pfx:top>
     <attrNameProcessTest camelCaseAttr="camelCaseAttrValue" lowercaseattr="lowercaseattr" />
     <tagNameProcessTest/>
-    <valueProcessTest>some value</valueProcessTest>
-    <textordertest>this is text with <b>markup</b> in the middle</textordertest>
 </sample>

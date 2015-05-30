@@ -140,7 +140,7 @@ Displaying results
 ------------------
 
 You might wonder why, using `console.dir` or `console.log` the output at some
-level is only `[Object]`. Don't worry, this is not because `xml2js` got lazy.
+level is only `[Object]`. Don't worry, this is not because xml2js got lazy.
 That's because Node uses `util.inspect` to convert the object into strings and
 that function stops after `depth=2` which is a bit low for most XML.
 
@@ -171,13 +171,12 @@ var xml = builder.buildObject(obj);
 
 At the moment, a one to one bi-directional conversion is guaranteed only for
 default configuration, except for `attrkey`, `charkey` and `explicitArray` options
-you can redefine to your taste. Writing CDATA is supported via setting the `cdata`
-option to `true`.
+you can redefine to your taste. Writing CDATA is not currently supported.
 
-Processing attribute, tag names and values
-------------------------------------------
+Processing attribute and tag names
+----------------------------------
 
-Since 0.4.1 you can optionally provide the parser with attribute and tag name processors as well as values:
+Since 0.4.1 you can optionally provide the parser with attribute and tag name processors:
 
 ```javascript
 
@@ -186,18 +185,11 @@ function nameToUpperCase(name){
 }
 
 //transform all attribute and tag names to uppercase
-parseString(xml, {
-  tagNameProcessors: [nameToUpperCase],
-  attrNameProcessors: [nameToUpperCase],
-  valueProcessors: [nameToUpperCase]},
-  function (err, result) {
-    // processed data
+parseString(xml, {tagNameProcessors: [nameToUpperCase], attrNameProcessors: [nameToUpperCase]}, function (err, result) {
 });
 ```
 
-The `tagNameProcessors`, `attrNameProcessors` and `valueProcessors` options
-accept an `Array` of functions with the following signature:
-
+The `tagNameProcessors` and `attrNameProcessors` options both accept an `Array` of functions with the following signature:
 ```javascript
 function (name){
   //do something with `name`
@@ -215,9 +207,6 @@ E.g. 'MyTagName' becomes 'myTagName'
 
 - `stripPrefix`: strips the xml namespace prefix. E.g `<foo:Bar/>` will become 'Bar'.
 (N.B.: the `xmlns` prefix is NOT stripped.)
-
-- `parseNumbers`: parsers integer-like strings as integers and float-like strings as floats
-E.g. "0" becomes 0 and "15.56" becomes 15.56
 
 Options
 =======
@@ -237,7 +226,8 @@ value})``. Possible options are:
   * `normalize` (default: `false`): Trim whitespaces inside text nodes.
   * `explicitRoot` (default: `true`): Set this if you want to get the root
     node in the resulting object.
-  * `emptyTag` (default: `''`): what will the value of empty nodes be.
+  * `emptyTag` (default: `undefined`): what will the value of empty nodes be.
+    Default is `{}`.
   * `explicitArray` (default: `true`): Always put child nodes in an array if
     true; otherwise an array is created only if there is more than one.
   * `ignoreAttrs` (default: `false`): Ignore all XML attributes and only create
@@ -256,26 +246,17 @@ value})``. Possible options are:
     then "children" won't be created. Added in 0.2.5.
   * `childkey` (default `$$`): Prefix that is used to access child elements if
     `explicitChildren` is set to `true`. Added in 0.2.5.
-  * `preserveChildrenOrder` (default `false`): Modifies the behavior of
-    `explicitChildren` so that the value of the "children" property becomes an
-    ordered array. When this is `true`, every node will also get a `#name` field
-    whose value will correspond to the XML nodeName, so that you may iterate
-    the "children" array and still be able to determine node names. The named
-    (and potentially unordered) properties are also retained in this
-    configuration at the same level as the ordered "children" array. Added in
-    0.4.9.
   * `charsAsChildren` (default `false`): Determines whether chars should be
     considered children if `explicitChildren` is on. Added in 0.2.5.
   * `async` (default `false`): Should the callbacks be async? This *might* be
     an incompatible change if your code depends on sync execution of callbacks.
-    Future versions of `xml2js` might change this default, so the recommendation
-    is to not depend on sync execution anyway. Added in 0.2.6.
+    xml2js 0.3 might change this default, so the recommendation is to not
+    depend on sync execution anyway. Added in 0.2.6.
   * `strict` (default `true`): Set sax-js to strict or non-strict parsing mode.
     Defaults to `true` which is *highly* recommended, since parsing HTML which
     is not well-formed XML might yield just about anything. Added in 0.2.7.
-  * `attrNameProcessors` (default: `null`): Allows the addition of attribute
-    name processing functions. Accepts an `Array` of functions with following
-    signature:
+  * `attrNameProcessors` (default: `null`): Allows the addition of attribute name processing functions.
+    Accepts an `Array` of functions with following signature:
     ```javascript
     function (name){
         //do something with `name`
@@ -283,9 +264,8 @@ value})``. Possible options are:
     }
     ```
     Added in 0.4.1
-  * `tagNameProcessors` (default: `null`): Allows the addition of tag name
-    processing functions. Accepts an `Array` of functions with following
-    signature:
+  * `tagNameProcessors` (default: `null`):Allows the addition of tag name processing functions.
+    Accepts an `Array` of functions with following signature:
     ```javascript
     function (name){
       //do something with `name`
@@ -293,22 +273,12 @@ value})``. Possible options are:
     }
     ```
     Added in 0.4.1
-  * `valueProcessors` (default: `null`): Allows the addition of value
-    processing functions. Accepts an `Array` of functions with following
-    signature:
-    ```javascript
-    function (name){
-      //do something with `name`
-      return name
-    }
-    ```
-    Added in 0.4.6
 
 Options for the `Builder` class
 -------------------------------
 
   * `rootName` (default `root`): root element name to be used in case
-     `explicitRoot` is `false` or to override the root element name.
+     `explicitiRoot` is `false` or to override the root element name.
   * `renderOpts` (default `{ 'pretty': true, 'indent': '  ', 'newline': '\n' }`):
     Rendering options for xmlbuilder-js.
     * pretty: prettify generated XML
@@ -320,11 +290,8 @@ Options for the `Builder` class
     * `xmldec.encoding` Encoding declaration, e.g. UTF-8
     * `xmldec.standalone` standalone document declaration: true or false
   * `doctype` (default `null`): optional DTD. Eg. `{'ext': 'hello.dtd'}`
-  * `headless` (default: `false`): omit the XML header. Added in 0.4.3.
-  * `cdata` (default: `false`): wrap text nodes in `<![CDATA[ ... ]]>`. Added in 0.4.5.
 
-`renderOpts`, `xmldec`,`doctype` and `headless` pass through to
-[xmlbuilder-js](https://github.com/oozcitak/xmlbuilder-js).
+renderOpts, xmldec and doctype pass through to [xmlbuilder-js](https://github.com/oozcitak/xmlbuilder-js)
 
 Updating to new version
 =======================
@@ -340,13 +307,13 @@ var parser = new xml2js.Parser(xml2js.defaults["0.2"]);
 
 To get the 0.1 defaults in version 0.2 you can just use
 `xml2js.defaults["0.1"]` in the same place. This provides you with enough time
-to migrate to the saner way of parsing in `xml2js` 0.2. We try to make the
+to migrate to the saner way of parsing in xml2js 0.2. We try to make the
 migration as simple and gentle as possible, but some breakage cannot be
 avoided.
 
 So, what exactly did change and why? In 0.2 we changed some defaults to parse
 the XML in a more universal and sane way. So we disabled `normalize` and `trim`
-so `xml2js` does not cut out any text content. You can reenable this at will of
+so xml2js does not cut out any text content. You can reenable this at will of
 course. A more important change is that we return the root tag in the resulting
 JavaScript structure via the `explicitRoot` setting, so you need to access the
 first element. This is useful for anybody who wants to know what the root node
@@ -360,7 +327,6 @@ Running tests, development
 ==========================
 
 [![Build Status](https://secure.travis-ci.org/Leonidas-from-XIV/node-xml2js.png?branch=master)](https://travis-ci.org/Leonidas-from-XIV/node-xml2js)
-[![Coverage Status](https://coveralls.io/repos/Leonidas-from-XIV/node-xml2js/badge.svg?branch=)](https://coveralls.io/r/Leonidas-from-XIV/node-xml2js?branch=master)
 [![Dependency Status](https://david-dm.org/Leonidas-from-XIV/node-xml2js.png)](https://david-dm.org/Leonidas-from-XIV/node-xml2js)
 
 The development requirements are handled by npm, you just need to install them.
@@ -368,20 +334,8 @@ We also have a number of unit tests, they can be run using `npm test` directly
 from the project root. This runs zap to discover all the tests and execute
 them.
 
-If you like to contribute, keep in mind that `xml2js` is written in
-CoffeeScript, so don't develop on the JavaScript files that are checked into
-the repository for convenience reasons. Also, please write some unit test to
-check your behaviour and if it is some user-facing thing, add some
-documentation to this README, so people will know it exists. Thanks in advance!
-
-Getting support
-===============
-
-Please, if you have a problem with the library, first make sure you read this
-README. If you read this far, thanks, you're good. Then, please make sure your
-problem really is with `xml2js`. It is? Okay, then I'll look at it. Send me a
-mail and we can talk. Please don't open issues, as I don't think that is the
-proper forum for support problems. Some problems might as well really be bugs
-in `xml2js`, if so I'll let you know to open an issue instead :)
-
-But if you know you really found a bug, feel free to open an issue instead.
+If you like to contribute, keep in mind that xml2js is written in CoffeeScript,
+so don't develop on the JavaScript files that are checked into the repository
+for convenience reasons. Also, please write some unit test to check your
+behaviour and if it is some user-facing thing, add some documentation to this
+README, so people will know it exists. Thanks in advance!
